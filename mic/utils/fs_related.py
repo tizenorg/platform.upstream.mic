@@ -107,13 +107,19 @@ def my_fuser(fp):
 class BindChrootMount:
     """Represents a bind mount of a directory into a chroot."""
     def __init__(self, src, chroot, dest = None, option = None):
-        self.src = src
         self.root = os.path.abspath(os.path.expanduser(chroot))
         self.option = option
 
+        self.orig_src = self.src = src
+        if os.path.islink(src):
+            self.src = os.readlink(src)
+            if not self.src.startswith('/'):
+                self.src = os.path.abspath(os.path.join(os.path.dirname(src),
+                                                        self.src))
+
         if not dest:
-            dest = src
-        self.dest = self.root + "/" + dest
+            dest = self.src
+        self.dest = os.path.join(self.root, dest.lstrip('/'))
 
         self.mounted = False
         self.mountcmd = find_binary_path("mount")
@@ -144,7 +150,12 @@ class BindChrootMount:
             rc = runner.show([self.mountcmd, "--bind", "-o", "remount,%s" % self.option, self.dest])
             if rc != 0:
                 raise MountError("Bind-remounting '%s' failed" % self.dest)
+
         self.mounted = True
+        if os.path.islink(self.orig_src):
+            dest = os.path.join(self.root, self.orig_src.lstrip('/'))
+            if not os.path.exists(dest):
+                os.symlink(self.src, dest)
 
     def unmount(self):
         if self.has_chroot_instance():
@@ -863,6 +874,9 @@ class LoopDevice(object):
 
     def _genloopid(self):
         import glob
+        if not glob.glob("/dev/loop[0-9]*"):
+            return 10
+
         fint = lambda x: x[9:].isdigit() and int(x[9:]) or 0
         maxid = 1 + max(filter(lambda x: x<100,
                                map(fint, glob.glob("/dev/loop[0-9]*"))))
@@ -940,10 +954,15 @@ class LoopDevice(object):
             os.unlink(self.device)
 
 DEVICE_PIDFILE_DIR = "/var/tmp/mic/device"
+DEVICE_LOCKFILE = "/var/lock/__mic_loopdev.lock"
 
 def get_loop_device(losetupcmd, lofile):
+    global DEVICE_PIDFILE_DIR
+    global DEVICE_LOCKFILE
+
     import fcntl
-    fp = open("/var/lock/__mic_loopdev.lock", 'w')
+    makedirs(os.path.dirname(DEVICE_LOCKFILE))
+    fp = open(DEVICE_LOCKFILE, 'w')
     fcntl.flock(fp, fcntl.LOCK_EX)
     try:
         loopdev = None
@@ -984,7 +1003,7 @@ def get_loop_device(losetupcmd, lofile):
         try:
             fcntl.flock(fp, fcntl.LOCK_UN)
             fp.close()
-            os.unlink('/var/lock/__mic_loopdev.lock')
+            os.unlink(DEVICE_LOCKFILE)
         except:
             pass
 

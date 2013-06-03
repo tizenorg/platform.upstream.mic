@@ -9,7 +9,7 @@ License:    GPLv2
 BuildArch:  noarch
 URL:        http://www.tizen.org
 Source0:    %{name}_%{version}.tar.gz
-Requires:   rpm-python
+Requires:   python-rpm
 Requires:   util-linux
 Requires:   coreutils
 Requires:   python >= 2.5

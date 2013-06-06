@@ -21,7 +21,6 @@ Requires:   parted
 Requires:   device-mapper
 Requires:   /usr/bin/genisoimage
 Requires:   cpio
-Requires:   isomd5sum
 Requires:   gzip
 Requires:   bzip2
 Requires:   python-urlgrabber
@@ -34,7 +33,11 @@ Requires:   btrfs-progs
 %endif
 %endif
 
-%if 0%{?suse_version}
+%if ! 0%{?tizen_version:1}
+Requires:   isomd5sum
+%endif
+
+%if 0%{?suse_version} || 0%{?tizen_version:1}
 Requires:   squashfs >= 4.0
 Requires:   python-m2crypto
 %else
@@ -48,11 +51,12 @@ Requires:   syslinux-extlinux
 
 %if 0%{?tizen_version:1}
 Requires:   qemu-linux-user
+Requires:   python-zypp
 %else
 Requires:   qemu-arm-static
+Requires:   tizen-python-zypp
 %endif
 
-Requires:   tizen-python-zypp
 
 BuildRequires:  python-devel
 %if ! 0%{?tizen_version:1}

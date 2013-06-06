@@ -4,8 +4,8 @@ Name:       mic
 Summary:    Image Creator for Linux Distributions
 Version:    0.19
 Release:    1
-Group:      System/Base
-License:    GPLv2
+Group:      System/Utilities
+License:    GPL-2.0
 BuildArch:  noarch
 URL:        http://www.tizen.org
 Source0:    %{name}_%{version}.tar.gz
@@ -21,7 +21,7 @@ Requires:   parted
 Requires:   device-mapper
 Requires:   /usr/bin/genisoimage
 Requires:   cpio
-Requires:   isomd5sum
+#Requires:   isomd5sum
 Requires:   gzip
 Requires:   bzip2
 Requires:   python-urlgrabber
@@ -38,8 +38,8 @@ Requires:   btrfs-progs
 Requires:   squashfs >= 4.0
 Requires:   python-m2crypto
 %else
-Requires:   squashfs-tools >= 4.0
-Requires:   m2crypto
+Requires:   squashfs >= 4.0
+Requires:   python-M2Crypto
 %endif
 
 %if 0%{?fedora_version} || 0%{?centos_version}
@@ -52,7 +52,7 @@ Requires:   qemu-linux-user
 Requires:   qemu-arm-static
 %endif
 
-Requires:   tizen-python-zypp
+Requires:   python-zypp
 
 BuildRequires:  python-devel
 %if ! 0%{?tizen_version:1}

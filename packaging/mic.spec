@@ -9,6 +9,7 @@ License:    GPL-2.0
 BuildArch:  noarch
 URL:        http://www.tizen.org
 Source0:    %{name}_%{version}.tar.gz
+Source1001: 	mic.manifest
 Requires:   python-rpm
 Requires:   util-linux
 Requires:   coreutils
@@ -72,6 +73,7 @@ an image.
 
 %prep
 %setup -q -n %{name}-%{version}
+cp %{SOURCE1001} .
 
 %build
 CFLAGS="$RPM_OPT_FLAGS" %{__python} setup.py build
@@ -94,6 +96,7 @@ install -m644 doc/mic.1 %{buildroot}/%{_prefix}/share/man/man1
 %endif
 
 %files
+%manifest %{name}.manifest
 %defattr(-,root,root,-)
 %doc doc/*
 %doc README.rst AUTHORS COPYING ChangeLog

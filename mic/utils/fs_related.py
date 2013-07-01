@@ -24,6 +24,7 @@ import stat
 import random
 import string
 import time
+import uuid
 
 from mic import msger
 from mic.utils import runner
@@ -438,7 +439,7 @@ class ExtDiskMount(DiskMount):
         DiskMount.__init__(self, disk, mountdir, fstype, rmmountdir)
         self.blocksize = blocksize
         self.fslabel = fslabel.replace("/", "")
-        self.uuid  = None
+        self.uuid = str(uuid.uuid4())
         self.skipformat = skipformat
         self.fsopts = fsopts
         self.extopts = None
@@ -459,7 +460,7 @@ class ExtDiskMount(DiskMount):
 
         msger.verbose("Formating %s filesystem on %s" % (self.fstype, self.disk.device))
         cmdlist = [self.mkfscmd, "-F", "-L", self.fslabel, "-m", "1", "-b",
-                   str(self.blocksize)]
+                   str(self.blocksize), "-U", self.uuid]
         if self.extopts:
             cmdlist.extend(self.extopts.split())
         cmdlist.extend([self.disk.device])
@@ -472,17 +473,6 @@ class ExtDiskMount(DiskMount):
         if not self.extopts:
             msger.debug("Tuning filesystem on %s" % self.disk.device)
             runner.show([self.tune2fs, "-c0", "-i0", "-Odir_index", "-ouser_xattr,acl", self.disk.device])
-
-        rc, out = runner.runtool([self.dumpe2fs, '-h', self.disk.device],
-                                  catch=2)
-        if rc != 0:
-            raise MountError("Error dumpe2fs %s filesystem on disk %s:\n%s" %
-                             (self.fstype, self.disk.device, out))
-        # FIXME: specify uuid in mkfs parameter
-        try:
-            self.uuid = self.__parse_field(out, "Filesystem UUID")
-        except:
-            self.uuid = None
 
     def __resize_filesystem(self, size = None):
         current_size = os.stat(self.disk.lofile)[stat.ST_SIZE]
@@ -560,7 +550,9 @@ class VfatDiskMount(DiskMount):
         DiskMount.__init__(self, disk, mountdir, fstype, rmmountdir)
         self.blocksize = blocksize
         self.fslabel = fslabel.replace("/", "")
-        self.uuid = "%08X" % int(time.time())
+        rand1 = random.randint(0, 2**16 - 1)
+        rand2 = random.randint(0, 2**16 - 1)
+        self.uuid = "%04X-%04X" % (rand1, rand2)
         self.skipformat = skipformat
         self.fsopts = fsopts
         self.fsckcmd = find_binary_path("fsck." + self.fstype)
@@ -571,7 +563,8 @@ class VfatDiskMount(DiskMount):
             return
 
         msger.verbose("Formating %s filesystem on %s" % (self.fstype, self.disk.device))
-        rc = runner.show([self.mkfscmd, "-n", self.fslabel, "-i", self.uuid, self.disk.device])
+        rc = runner.show([self.mkfscmd, "-n", self.fslabel,
+                          "-i", self.uuid.replace("-", ""), self.disk.device])
         if rc != 0:
             raise MountError("Error creating %s filesystem on disk %s" % (self.fstype,self.disk.device))
 

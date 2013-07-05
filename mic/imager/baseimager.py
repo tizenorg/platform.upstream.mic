@@ -922,6 +922,10 @@ class BaseImageCreator(object):
         for pkg in self._preinstall_pkgs:
             pkg_manager.preInstall(pkg)
 
+    def __check_packages(self, pkg_manager):
+        for pkg in self.check_pkgs:
+            pkg_manager.checkPackage(pkg)
+
     def __attachment_packages(self, pkg_manager):
         if not self.ks:
             return
@@ -1019,6 +1023,7 @@ class BaseImageCreator(object):
             self.__select_groups(pkg_manager)
             self.__deselect_packages(pkg_manager)
             self.__localinst_packages(pkg_manager)
+            self.__check_packages(pkg_manager)
 
             BOOT_SAFEGUARD = 256L * 1024 * 1024 # 256M
             checksize = self._root_fs_avail
@@ -1079,11 +1084,13 @@ class BaseImageCreator(object):
 
             try:
                 try:
-                    subprocess.call([s.interp, script],
-                                    preexec_fn = preexec,
-                                    env = env,
-                                    stdout = sys.stdout,
-                                    stderr = sys.stderr)
+                    p = subprocess.Popen([s.interp, script],
+                                       preexec_fn = preexec,
+                                       env = env,
+                                       stdout = subprocess.PIPE,
+                                       stderr = subprocess.STDOUT)
+                    for entry in p.communicate()[0].splitlines():
+                        msger.info(entry)
                 except OSError, (err, msg):
                     raise CreatorError("Failed to execute %%post script "
                                        "with '%s' : %s" % (s.interp, msg))

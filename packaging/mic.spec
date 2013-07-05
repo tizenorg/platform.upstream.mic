@@ -2,7 +2,7 @@
 
 Name:       mic
 Summary:    Image Creator for Linux Distributions
-Version:    0.19.3
+Version:    0.20
 Release:    1
 Group:      System/Base
 License:    GPLv2

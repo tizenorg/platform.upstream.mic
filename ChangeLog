@@ -1,16 +1,19 @@
-<<<<<<< HEAD
-Release 0.19.3 - Tue Jul 01 2013 - Gui Chen <gui.chen@intel.com>
- * fix vfat UUID issue in liveusb
-
-Release 0.19.2 - Mon Jul 01 2013 - Gui Chen <gui.chen@intel.com>
+Release 0.21 - Mon Aug 26 2013 - Gui Chen <gui.chen@intel.com>
 =====================================================================
- * introduce 'installerfw' command in kickstart
- * export several environment to keep image information
+  * new distribution support: Fedora 19
+  * refactor chroot module to correct the logic
+  * add an alias for installerfw - installerfw_plugins
+  * remove fuser dependency to avoid some unmount issue
+  * enable proxy setting with authentication
+  * don't get proxy info from /etc/sysconfig/proxy ever
+  * kill processes inside chroot after post script running
+  * reload device mapper using 'dmsetup' utility
+  * bug fix:
+    - fix bootloader options omitted
+    - warn failed boot partition flags set
+    - fix wrong file descriptor issue
+    - fix some requires
 
-Release 0.19.1 - Thu Jun 21 2013 - Gui Chen <gui.chen@intel.com>
-=====================================================================
- * fall back to old arch detecting
-=======
 Release 0.20 - Mon Jul 01 2013 - Gui Chen <gui.chen@intel.com>
 =====================================================================
   * new distribution support: CentOS 6
@@ -19,7 +22,12 @@ Release 0.20 - Mon Jul 01 2013 - Gui Chen <gui.chen@intel.com>
   * improve output message of post scripts
   * bug fix:
     - fix rpm not support 'VCS' tag traceback
->>>>>>> release-0.20
+
+Release 0.19.3 - Tue Jul 01 2013 - Gui Chen <gui.chen@intel.com>
+ * fix vfat UUID issue in liveusb
+ * introduce 'installerfw' command in kickstart
+ * export several environment to keep image information
+ * fall back to old arch detecting
 
 Release 0.19 - Thu May 16 2013 - Gui Chen <gui.chen@intel.com>
 =====================================================================

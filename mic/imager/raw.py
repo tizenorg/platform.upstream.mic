@@ -56,7 +56,7 @@ class RawImageCreator(BaseImageCreator):
         self.appliance_release = None
         self.compress_image = compress_image
         self.bmap_needed = generate_bmap
-        self._need_extlinux = not kickstart.use_installerfw(self.ks, "extlinux")
+        self._need_extlinux = not kickstart.use_installerfw(self.ks, "bootloader")
         #self.getsource = False
         #self.listpkg = False
 
@@ -380,6 +380,7 @@ class RawImageCreator(BaseImageCreator):
             for imgfile in os.listdir(self.__imgdir):
                 if imgfile.endswith('.raw') or imgfile.endswith('bin'):
                     imgpath = os.path.join(self.__imgdir, imgfile)
+                    msger.info("Compressing image %s" % imgfile)
                     misc.compressing(imgpath, self.compress_image)
 
         if self.pack_to:

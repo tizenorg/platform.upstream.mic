@@ -2,30 +2,41 @@
 
 Name:       mic
 Summary:    Image Creator for Linux Distributions
-Version:    0.20
+Version:    0.21
 Release:    1
 Group:      System/Base
 License:    GPLv2
 BuildArch:  noarch
 URL:        http://www.tizen.org
 Source0:    %{name}_%{version}.tar.gz
+%if 0%{?tizen_version:1}
+Requires:   python-rpm
+%else
 Requires:   rpm-python
+%endif
 Requires:   util-linux
 Requires:   coreutils
 Requires:   python >= 2.5
 Requires:   e2fsprogs
-Requires:   dosfstools >= 2.11-8
+Requires:   dosfstools >= 2.11
+%if 0%{?centos_version}
 Requires:   syslinux >= 3.82
+%else
+Requires:   syslinux >= 4.05
+%endif
 Requires:   kpartx
 Requires:   parted
 Requires:   device-mapper
 Requires:   /usr/bin/genisoimage
 Requires:   cpio
+%if ! 0%{?tizen_version:1}
 Requires:   isomd5sum
+%endif
 Requires:   gzip
 Requires:   bzip2
 Requires:   python-urlgrabber
 Requires:   yum >= 3.2.24
+Requires:   psmisc
 %if ! 0%{?centos_version}
 %if 0%{?suse_version}
 Requires:   btrfsprogs
@@ -34,7 +45,7 @@ Requires:   btrfs-progs
 %endif
 %endif
 
-%if 0%{?suse_version}
+%if 0%{?suse_version} || 0%{?tizen_version:1}
 Requires:   squashfs >= 4.0
 Requires:   python-m2crypto
 %else
@@ -46,8 +57,8 @@ Requires:   m2crypto
 Requires:   syslinux-extlinux
 %endif
 
-%if 0%{?tizen_version:1}
-Requires:   qemu-linux-user
+%if 0%{?suse_version} || 0%{?tizen_version:1}
+Requires:   /usr/bin/qemu-arm
 %else
 Requires:   qemu-arm-static
 %endif

@@ -22,7 +22,7 @@ import os
 
 from mic import msger
 from mic.utils import runner
-from mic.utils.errors import MountError
+from mic.utils.errors import MountError, CreatorError
 from mic.utils.fs_related import *
 from mic.utils.gpt_parser import GptParser
 
@@ -46,6 +46,7 @@ class PartitionedMount(Mount):
         self.parted = find_binary_path("parted")
         self.kpartx = find_binary_path("kpartx")
         self.mkswap = find_binary_path("mkswap")
+        self.dmsetup = find_binary_path("dmsetup")
         self.btrfscmd=None
         self.mountcmd = find_binary_path("mount")
         self.umountcmd = find_binary_path("umount")
@@ -96,7 +97,7 @@ class PartitionedMount(Mount):
     def add_partition(self, size, disk_name, mountpoint, fstype = None,
                       label=None, fsopts = None, boot = False, align = None,
                       part_type = None):
-        """ Add the next partition. Prtitions have to be added in the
+        """ Add the next partition. Partitions have to be added in the
         first-to-last order. """
 
         ks_pnum = len(self.partitions)
@@ -151,6 +152,7 @@ class PartitionedMount(Mount):
                      'boot': boot, # Bootable flag
                      'align': align, # Partition alignment
                      'part_type' : part_type, # Partition type
+                     'uuid': None, # Partition UUID (no-GPT use)
                      'partuuid': None } # Partition UUID (GPT-only)
 
             self.__add_partition(part)
@@ -184,7 +186,7 @@ class PartitionedMount(Mount):
                 # in which case it would map to the 1-byte "partition type"
                 # filed at offset 3 of the partition entry.
                 raise MountError("setting custom partition type is only " \
-                                 "imlemented for GPT partitions")
+                                 "implemented for GPT partitions")
 
             # Get the disk where the partition is located
             d = self.disks[p['disk_name']]
@@ -207,7 +209,7 @@ class PartitionedMount(Mount):
                 # If not first partition and we do have alignment set we need
                 # to align the partition.
                 # FIXME: This leaves a empty spaces to the disk. To fill the
-                # gaps we could enlargea the previous partition?
+                # gaps we could enlarge the previous partition?
 
                 # Calc how much the alignment is off.
                 align_sectors = d['offset'] % (p['align'] * 1024 / self.sector_size)
@@ -248,8 +250,8 @@ class PartitionedMount(Mount):
                                p['start'], p['start'] + p['size'] - 1,
                                p['size'], p['size'] * self.sector_size))
 
-        # Once all the partitions have been layed out, we can calculate the
-        # minumim disk sizes.
+        # Once all the partitions have been laid out, we can calculate the
+        # minimum disk sizes.
         for disk_name, d in self.disks.items():
             d['min_size'] = d['offset']
             if d['ptable_format'] == 'gpt':
@@ -266,20 +268,17 @@ class PartitionedMount(Mount):
 
         rc, out = runner.runtool(args, catch = 3)
         out = out.strip()
-        if out:
-            msger.debug('"parted" output: %s' % out)
-
-        if rc != 0:
-            # We don't throw exception when return code is not 0, because
-            # parted always fails to reload part table with loop devices. This
-            # prevents us from distinguishing real errors based on return
-            # code.
-            msger.debug("WARNING: parted returned '%s' instead of 0" % rc)
+        msger.debug("'parted': exitcode: %d, output: %s" % (rc, out))
+        # We don't throw exception when return code is not 0, because
+        # parted always fails to reload part table with loop devices. This
+        # prevents us from distinguishing real errors based on return
+        # code.
+        return rc, out
 
     def __create_partition(self, device, parttype, fstype, start, size):
         """ Create a partition on an image described by the 'device' object. """
 
-        # Start is included to the size so we need to substract one from the end.
+        # Start is included to the size so we need to subtract one from the end.
         end = start + size - 1
         msger.debug("Added '%s' partition, sectors %d-%d, size %d sectors" %
                     (parttype, start, end, size))
@@ -347,8 +346,16 @@ class PartitionedMount(Mount):
                     flag_name = "boot"
                 msger.debug("Set '%s' flag for partition '%s' on disk '%s'" % \
                             (flag_name, p['num'], d['disk'].device))
-                self.__run_parted(["-s", d['disk'].device, "set",
-                                   "%d" % p['num'], flag_name, "on"])
+                cmd = ["-s", d['disk'].device,
+                       "set", "%d" % p['num'],
+                       flag_name, "on"]
+                exitcode, output = self.__run_parted(cmd)
+                if exitcode != 0:
+                    msger.warning(
+                        "partition '%s' is marked with --active, "
+                        "but flag '%s' can't be set: "
+                        "exitcode: %s, output: %s"
+                        % (p['mountpoint'], flag_name, exitcode, output))
 
         # If the partition table format is "gpt", find out PARTUUIDs for all
         # the partitions. And if users specified custom parition type UUIDs,
@@ -451,10 +458,15 @@ class PartitionedMount(Mount):
                 raise MountError("Failed to map partitions for '%s'" %
                                  d['disk'].device)
 
-            # FIXME: there is a bit delay for multipath device setup,
-            # wait 10ms for the setup
-            import time
-            time.sleep(10)
+            if not os.path.exists(mapperdev):
+                # load mapper device if not updated
+                runner.quiet([self.dmsetup, "mknodes"])
+                # still not updated, roll back
+                if not os.path.exists(mapperdev):
+                    runner.quiet([self.kpartx, "-d", d['disk'].device])
+                    raise MountError("Failed to load mapper devices for '%s'" %
+                                     d['disk'].device)
+
             d['mapped'] = True
 
     def __unmap_partitions(self):

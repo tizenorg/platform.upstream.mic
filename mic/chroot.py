@@ -17,253 +17,241 @@
 
 from __future__ import with_statement
 import os
+import re
 import shutil
 import subprocess
 
 from mic import msger
 from mic.conf import configmgr
-from mic.utils import misc, errors, runner, fs_related
+from mic.utils import misc, errors, runner, fs_related, lock
 
-chroot_lockfd = -1
-chroot_lock = ""
+#####################################################################
+### GLOBAL CONSTANTS
+#####################################################################
+
+chroot_bindmounts = None
+chroot_lock = None
 BIND_MOUNTS = (
                 "/proc",
                 "/proc/sys/fs/binfmt_misc",
                 "/sys",
                 "/dev",
                 "/dev/pts",
-                "/dev/shm",
                 "/var/lib/dbus",
                 "/var/run/dbus",
                 "/var/lock",
+                "/lib/modules",
               )
 
-def cleanup_after_chroot(targettype,imgmount,tmpdir,tmpmnt):
-    if imgmount and targettype == "img":
-        imgmount.cleanup()
+#####################################################################
+### GLOBAL ROUTINE
+#####################################################################
 
-    if tmpdir:
-        shutil.rmtree(tmpdir, ignore_errors = True)
+def ELF_arch(chrootdir):
+    """ detect the architecture of an ELF file """
+    #FIXME: if chkfiles are symlink, it will be complex
+    chkfiles = ('/bin/bash', '/sbin/init')
+    # regular expression to arch mapping
+    mapping = {
+                r"Intel 80[0-9]86": "i686",
+                r"x86-64": "x86_64",
+                r"ARM": "arm",
+              }
 
-    if tmpmnt:
-        shutil.rmtree(tmpmnt, ignore_errors = True)
+    for path in chkfiles:
+        cpath = os.path.join(chrootdir, path.lstrip('/'))
+        if not os.path.exists(cpath):
+            continue
 
-def check_bind_mounts(chrootdir, bindmounts):
-    chrootmounts = []
+        outs = runner.outs(['file', cpath])
+        for ptn in mapping.keys():
+            if re.search(ptn, outs):
+                return mapping[ptn]
+
+    raise errors.CreatorError("Failed to detect architecture of chroot: %s" %
+                              chrootdir)
+
+def get_bindmounts(chrootdir, bindmounts = None):
+    """ calculate all bind mount entries for global usage """
+    # bindmounts should be a string like '/dev:/dev'
+    # FIXME: refine the bindmounts from string to dict
+    global chroot_bindmounts
+
+    def totuple(string):
+        """ convert string contained ':' to a tuple """
+        if ':' in string:
+            src, dst = string.split(':', 1)
+        else:
+            src = string
+            dst = None
+
+        return (src or None, dst or None)
+
+    if chroot_bindmounts:
+        return chroot_bindmounts
+
+    chroot_bindmounts = []
+    bindmounts = bindmounts or ""
+    mountlist = []
+
     for mount in bindmounts.split(";"):
         if not mount:
             continue
 
-        srcdst = mount.split(":")
-        if len(srcdst) == 1:
-            srcdst.append("none")
+        (src, dst) = totuple(mount)
 
-        if not os.path.isdir(srcdst[0]):
-            return False
-
-        if srcdst[1] == "" or srcdst[1] == "none":
-            srcdst[1] = None
-
-        if srcdst[0] in BIND_MOUNTS or srcdst[0] == '/':
+        if src in BIND_MOUNTS or src == '/':
             continue
 
-        if chrootdir:
-            if not srcdst[1]:
-                srcdst[1] = os.path.abspath(os.path.expanduser(srcdst[0]))
-            else:
-                srcdst[1] = os.path.abspath(os.path.expanduser(srcdst[1]))
+        if not os.path.exists(src):
+            os.makedirs(src)
 
-            tmpdir = chrootdir + "/" + srcdst[1]
-            if os.path.isdir(tmpdir):
-                msger.warning("Warning: dir %s has existed."  % tmpdir)
-
-    return True
-
-def cleanup_mounts(chrootdir):
-    umountcmd = misc.find_binary_path("umount")
-    abs_chrootdir = os.path.abspath(chrootdir)
-    mounts = open('/proc/mounts').readlines()
-    for line in reversed(mounts):
-        if abs_chrootdir not in line:
+        if dst and os.path.isdir("%s/%s" % (chrootdir, dst)):
+            msger.warning("%s existed in %s , skip it." % (dst, chrootdir))
             continue
 
-        point = line.split()[1]
+        mountlist.append(totuple(mount))
 
-        # '/' to avoid common name prefix
-        if abs_chrootdir == point or point.startswith(abs_chrootdir + '/'):
-            args = [ umountcmd, "-l", point ]
-            ret = runner.quiet(args)
-            if ret != 0:
-                msger.warning("failed to unmount %s" % point)
+    for mntpoint in BIND_MOUNTS:
+        if os.path.isdir(mntpoint):
+            mountlist.append(tuple((mntpoint, None)))
 
-    return 0
+    for pair in mountlist:
+        if pair[0] == "/lib/modules":
+            opt = "ro"
+        else:
+            opt = None
+        bmount = fs_related.BindChrootMount(pair[0], chrootdir, pair[1], opt)
+        chroot_bindmounts.append(bmount)
 
-def setup_chrootenv(chrootdir, bindmounts = None, mountparent = True):
-    global chroot_lockfd, chroot_lock
+    return chroot_bindmounts
 
-    def get_bind_mounts(chrootdir, bindmounts, mountparent = True):
-        chrootmounts = []
-        if bindmounts in ("", None):
-            bindmounts = ""
+#####################################################################
+### SETUP CHROOT ENVIRONMENT
+#####################################################################
 
-        for mount in bindmounts.split(";"):
-            if not mount:
-                continue
+def bind_mount(chrootmounts):
+    """ perform bind mounting """
+    for mnt in chrootmounts:
+        msger.verbose("bind_mount: %s -> %s" % (mnt.src, mnt.dest))
+        mnt.mount()
 
-            srcdst = mount.split(":")
-            srcdst[0] = os.path.abspath(os.path.expanduser(srcdst[0]))
-            if len(srcdst) == 1:
-                srcdst.append("none")
+def setup_resolv(chrootdir):
+    """ resolve network """
+    try:
+        shutil.copyfile("/etc/resolv.conf", chrootdir + "/etc/resolv.conf")
+    except (OSError, IOError):
+        pass
 
-            # if some bindmount is not existed, but it's created inside
-            # chroot, this is not expected
-            if not os.path.exists(srcdst[0]):
-                os.makedirs(srcdst[0])
-
-            if not os.path.isdir(srcdst[0]):
-                continue
-
-            if srcdst[0] in BIND_MOUNTS or srcdst[0] == '/':
-                msger.verbose("%s will be mounted by default." % srcdst[0])
-                continue
-
-            if srcdst[1] == "" or srcdst[1] == "none":
-                srcdst[1] = None
-            else:
-                srcdst[1] = os.path.abspath(os.path.expanduser(srcdst[1]))
-                if os.path.isdir(chrootdir + "/" + srcdst[1]):
-                    msger.warning("%s has existed in %s , skip it."\
-                                  % (srcdst[1], chrootdir))
-                    continue
-
-            chrootmounts.append(fs_related.BindChrootMount(srcdst[0],
-                                                           chrootdir,
-                                                           srcdst[1]))
-
-        """Default bind mounts"""
-        for pt in BIND_MOUNTS:
-            if not os.path.exists(pt):
-                continue
-            chrootmounts.append(fs_related.BindChrootMount(pt,
-                                                           chrootdir,
-                                                           None))
-
-        if mountparent:
-            chrootmounts.append(fs_related.BindChrootMount("/",
-                                                           chrootdir,
-                                                           "/parentroot",
-                                                           "ro"))
-
-        for kernel in os.listdir("/lib/modules"):
-            chrootmounts.append(fs_related.BindChrootMount(
-                                                "/lib/modules/"+kernel,
-                                                chrootdir,
-                                                None,
-                                                "ro"))
-
-        return chrootmounts
-
-    def bind_mount(chrootmounts):
-        for b in chrootmounts:
-            msger.verbose("bind_mount: %s -> %s" % (b.src, b.dest))
-            b.mount()
-
-    def setup_resolv(chrootdir):
-        try:
-            shutil.copyfile("/etc/resolv.conf", chrootdir + "/etc/resolv.conf")
-        except:
-            pass
-
-    globalmounts = get_bind_mounts(chrootdir, bindmounts, mountparent)
-    bind_mount(globalmounts)
-
-    setup_resolv(chrootdir)
-
+def setup_mtab(chrootdir):
+    """ adjust mount table """
     mtab = "/etc/mtab"
     dstmtab = chrootdir + mtab
     if not os.path.islink(dstmtab):
         shutil.copyfile(mtab, dstmtab)
 
-    chroot_lock = os.path.join(chrootdir, ".chroot.lock")
-    chroot_lockfd = open(chroot_lock, "w")
+def setup_chrootenv(chrootdir, bindmounts = None):
+    """ setup chroot environment """
+    global chroot_lock
 
-    return globalmounts
+    # acquire the lock
+    if not chroot_lock:
+        lockpath = os.path.join(chrootdir, '.chroot.lock')
+        chroot_lock = lock.SimpleLockfile(lockpath)
+    chroot_lock.acquire()
+    # bind mounting
+    bind_mount(get_bindmounts(chrootdir, bindmounts))
+    # setup resolv.conf
+    setup_resolv(chrootdir)
+    # update /etc/mtab
+    setup_mtab(chrootdir)
 
-def cleanup_chrootenv(chrootdir, bindmounts=None, globalmounts=()):
-    global chroot_lockfd, chroot_lock
+    return None
 
-    def bind_unmount(chrootmounts):
-        for b in reversed(chrootmounts):
-            msger.verbose("bind_unmount: %s -> %s" % (b.src, b.dest))
-            b.unmount()
+######################################################################
+### CLEANUP CHROOT ENVIRONMENT
+######################################################################
 
-    def cleanup_resolv(chrootdir):
+def bind_unmount(chrootmounts):
+    """ perform bind unmounting """
+    for mnt in reversed(chrootmounts):
+        msger.verbose("bind_unmount: %s -> %s" % (mnt.src, mnt.dest))
+        mnt.unmount()
+
+def cleanup_resolv(chrootdir):
+    """ clear resolv.conf """
+    try:
+        fdes = open(chrootdir + "/etc/resolv.conf", "w")
+        fdes.truncate(0)
+        fdes.close()
+    except (OSError, IOError):
+        pass
+
+def kill_proc_inchroot(chrootdir):
+    """ kill all processes running inside chrootdir """
+    import glob
+    for fpath in glob.glob("/proc/*/root"):
         try:
-            fd = open(chrootdir + "/etc/resolv.conf", "w")
-            fd.truncate(0)
-            fd.close()
-        except:
+            if os.readlink(fpath) == chrootdir:
+                pid = int(fpath.split("/")[2])
+                os.kill(pid, 9)
+        except (OSError, ValueError):
             pass
 
-    def kill_processes(chrootdir):
-        import glob
-        for fp in glob.glob("/proc/*/root"):
-            try:
-                if os.readlink(fp) == chrootdir:
-                    pid = int(fp.split("/")[2])
-                    os.kill(pid, 9)
-            except:
-                pass
+def cleanup_mtab(chrootdir):
+    """ remove mtab file """
+    if os.path.exists(chrootdir + "/etc/mtab"):
+        os.unlink(chrootdir + "/etc/mtab")
 
-    def cleanup_mountdir(chrootdir, bindmounts):
-        if bindmounts == "" or bindmounts == None:
-            return
-        chrootmounts = []
-        for mount in bindmounts.split(";"):
-            if not mount:
-                continue
+def cleanup_mounts(chrootdir):
+    """ clean up all mount entries owned by chrootdir """
+    umountcmd = misc.find_binary_path("umount")
+    mounts = open('/proc/mounts').readlines()
+    for line in reversed(mounts):
+        if chrootdir not in line:
+            continue
 
-            srcdst = mount.split(":")
+        point = line.split()[1]
 
-            if len(srcdst) == 1:
-                srcdst.append("none")
+        # '/' to avoid common name prefix
+        if chrootdir == point or point.startswith(chrootdir + '/'):
+            args = [ umountcmd, "-l", point ]
+            ret = runner.quiet(args)
+            if ret != 0:
+                msger.warning("failed to unmount %s" % point)
+            if os.path.isdir(point) and len(os.listdir(point)) == 0:
+                shutil.rmtree(point)
+            else:
+                msger.warning("%s is not directory or is not empty" % point)
 
-            if srcdst[0] == "/":
-                continue
+def cleanup_chrootenv(chrootdir, bindmounts=None, globalmounts=()):
+    """ clean up chroot environment """
+    global chroot_lock
 
-            if srcdst[1] == "" or srcdst[1] == "none":
-                srcdst[1] = srcdst[0]
+    # kill processes
+    kill_proc_inchroot(chrootdir)
+    # clean mtab
+    cleanup_mtab(chrootdir)
+    # clean resolv.conf
+    cleanup_resolv(chrootdir)
+    # bind umounting
+    bind_unmount(get_bindmounts(chrootdir, bindmounts))
+    # FIXME: need to clean up mounts?
+    #cleanup_mounts(chrootdir)
 
-            srcdst[1] = os.path.abspath(os.path.expanduser(srcdst[1]))
-            tmpdir = chrootdir + "/" + srcdst[1]
-            if os.path.isdir(tmpdir):
-                if len(os.listdir(tmpdir)) == 0:
-                    shutil.rmtree(tmpdir, ignore_errors = True)
-                else:
-                    msger.warning("Warning: dir %s isn't empty." % tmpdir)
+    # release the lock
+    if chroot_lock:
+        chroot_lock.release()
+        chroot_lock = None
 
-    chroot_lockfd.close()
-    bind_unmount(globalmounts)
+    return None
 
-    if not fs_related.my_fuser(chroot_lock):
-        tmpdir = chrootdir + "/parentroot"
-        if os.path.exists(tmpdir) and len(os.listdir(tmpdir)) == 0:
-            shutil.rmtree(tmpdir, ignore_errors = True)
+#####################################################################
+### CHROOT STUFF
+#####################################################################
 
-        cleanup_resolv(chrootdir)
-
-        if os.path.exists(chrootdir + "/etc/mtab"):
-            os.unlink(chrootdir + "/etc/mtab")
-
-        kill_processes(chrootdir)
-
-    cleanup_mountdir(chrootdir, bindmounts)
-
-def chroot(chrootdir, bindmounts = None, execute = "/bin/bash"):
-    def mychroot():
-        os.chroot(chrootdir)
-        os.chdir("/")
-
+def savefs_before_chroot(chrootdir, saveto = None):
+    """ backup chrootdir to another directory before chrooting in """
     if configmgr.chroot['saveto']:
         savefs = True
         saveto = configmgr.chroot['saveto']
@@ -293,40 +281,31 @@ def chroot(chrootdir, bindmounts = None, execute = "/bin/bash"):
         else:
             msger.warning(wrnmsg)
 
-    dev_null = os.open("/dev/null", os.O_WRONLY)
-    files_to_check = ["/bin/bash", "/sbin/init"]
+def cleanup_after_chroot(targettype, imgmount, tmpdir, tmpmnt):
+    """ clean up all temporary directories after chrooting """
+    if imgmount and targettype == "img":
+        imgmount.cleanup()
 
-    architecture_found = False
+    if tmpdir:
+        shutil.rmtree(tmpdir, ignore_errors = True)
 
-    """ Register statically-linked qemu-arm if it is an ARM fs """
-    qemu_emulator = None
+    if tmpmnt:
+        shutil.rmtree(tmpmnt, ignore_errors = True)
 
-    for ftc in files_to_check:
-        ftc = "%s/%s" % (chrootdir,ftc)
+def chroot(chrootdir, bindmounts = None, execute = "/bin/bash"):
+    """ chroot the chrootdir and execute the command """
+    def mychroot():
+        """ pre-execute function """
+        os.chroot(chrootdir)
+        os.chdir("/")
 
-        # Return code of 'file' is "almost always" 0 based on some man pages
-        # so we need to check the file existance first.
-        if not os.path.exists(ftc):
-            continue
+    arch = ELF_arch(chrootdir)
+    if arch == "arm":
+        qemu_emulator = misc.setup_qemu_emulator(chrootdir, "arm")
+    else:
+        qemu_emulator = None
 
-        for line in runner.outs(['file', ftc]).splitlines():
-            if 'ARM' in line:
-                qemu_emulator = misc.setup_qemu_emulator(chrootdir, "arm")
-                architecture_found = True
-                break
-
-            if 'Intel' in line:
-                architecture_found = True
-                break
-
-        if architecture_found:
-            break
-
-    os.close(dev_null)
-    if not architecture_found:
-        raise errors.CreatorError("Failed to get architecture from any of the "
-                                  "following files %s from chroot." \
-                                  % files_to_check)
+    savefs_before_chroot(chrootdir, None)
 
     try:
         msger.info("Launching shell. Exit to continue.\n"

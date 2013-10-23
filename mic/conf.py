@@ -27,13 +27,10 @@ DEFAULT_GSITECONF = '/etc/mic/mic.conf'
 
 
 def get_siteconf():
-    mic_path = os.path.dirname(__file__)
-
-    m = re.match(r"(?P<prefix>.*)\/lib(64)?\/.*", mic_path)
-    if m and m.group('prefix') != "/usr":
-        return os.path.join(m.group('prefix'), "etc/mic/mic.conf")
-
-    return DEFAULT_GSITECONF
+    if hasattr(sys, 'real_prefix'):
+        return os.path.join(sys.prefix, "etc/mic/mic.conf")
+    else:
+        return DEFAULT_GSITECONF
 
 class ConfigMgr(object):
     prefer_backends = ["zypp", "yum"]
@@ -47,6 +44,7 @@ class ConfigMgr(object):
                     "cachedir": '/var/tmp/mic/cache',
                     "outdir": './mic-output',
 
+                    "plugin_dir": "/usr/lib/mic/plugins",
                     "arch": None, # None means auto-detect
                     "pkgmgr": "auto",
                     "name": "output",
@@ -78,6 +76,7 @@ class ConfigMgr(object):
                 'bootstrap': {
                     "rootdir": '/var/tmp/mic-bootstrap',
                     "packages": [],
+                    "distro_name": "",
                 },
                }
 
@@ -217,7 +216,7 @@ class ConfigMgr(object):
         else:
             if len(target_archlist) == 1:
                 self.create['arch'] = str(target_archlist[0])
-                msger.info("\nUse detected arch %s." % target_archlist[0])
+                msger.info("Use detected arch %s." % target_archlist[0])
             else:
                 raise errors.ConfigError("Please specify a valid arch, "
                                          "the choice can be: %s" \

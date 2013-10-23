@@ -1,14 +1,22 @@
-mic (0.21.2-1) unstable; urgency=low
-  * use sync mode in kpartx command
+mic (0.22-1) unstable; urgency=low
+   * use __version__ variable instead of VERSION file
+   * refactor msger module to ulitize logging module
+   * refine error class module
+   * improve installation in virtualenv
+   * add bash completion support
+   * add zsh completion support
+   * export mapper device related to installer framework
+   * update BmapCreate to the latest version
+   * bug fix:
+     - fix customized plugin_dir not work in bootstrap
+     - fix packing process exit on Ubuntu
+     - fix loop device alloaction failed on openSUSE
+     - fix incorrect number showing during installing
+     - set owner of cacheidr/outdir to SUDO_USER
+     - correct project url in setup.py
+     - fix mic not work when mic.conf disappear
 
- -- Gui Chen <gui.chen@intel.com>  Thu, 26 Sep 2013 17:25:35 +0800
-
-mic (0.21.1-1) unstable; urgency=low
-  * prefer to use 'pbzip2'/'pigz' to compress image if possible
-  * fix exiting at packaging images on Ubuntu distro
-  * won't fallback to native mode if bootstrap not found
-
- -- Gui Chen <gui.chen@intel.com>  Wed, 18 Sep 2013 17:25:35 +0800
+ -- Gui Chen <gui.chen@intel.com>  Thu, 24 Oct 2013 17:25:35 +0800
 
 mic (0.21-1) unstable; urgency=low
   * new distribution support: Fedora 19

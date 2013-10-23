@@ -907,12 +907,6 @@ class LoopDevice(object):
 
 
         if self._kpseek(self.device):
-            if self.created:
-                for i in range(3, os.sysconf("SC_OPEN_MAX")):
-                    try:
-                        os.close(i)
-                    except:
-                        pass
             runner.quiet([self.kpartxcmd, "-d", self.device])
         if self._loseek(self.device):
             runner.quiet([self.losetupcmd, "-d", self.device])
@@ -942,7 +936,7 @@ def get_loop_device(losetupcmd, lofile):
 
         # provide an avaible loop device
         rc, out = runner.runtool([losetupcmd, "--find"])
-        if rc == 0:
+        if rc == 0 and out:
             loopdev = out.split()[0]
             devinst.register(loopdev)
         if not loopdev or not os.path.exists(loopdev):

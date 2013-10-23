@@ -16,11 +16,10 @@
 # Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
 import os, sys, errno
-from mic import msger, creator
+from mic import msger, creator, __version__ as VERSION
 from mic.utils import cmdln, misc, errors
 from mic.conf import configmgr
 from mic.plugin import pluginmgr
-from mic.__version__ import VERSION
 
 
 def optparser_setup(func):
@@ -65,7 +64,7 @@ class MicCmd(cmdln.Cmdln):
 
     def postoptparse(self):
         if self.options.verbose:
-            msger.set_loglevel('verbose')
+            msger.set_loglevel('VERBOSE')
 
         if self.options.debug:
             try:
@@ -74,24 +73,24 @@ class MicCmd(cmdln.Cmdln):
             except ImportError:
                 pass
 
-            msger.set_loglevel('debug')
+            msger.set_loglevel('DEBUG')
 
         self.print_version()
 
     def help_create(self):
-        cr = creator.Creator()
-        cr.optparser = cr.get_optparser()
-        doc = cr.__doc__
-        doc = cr._help_reindent(doc)
-        doc = cr._help_preprocess(doc, None)
-        doc = doc.replace(cr.name, "${cmd_name}", 1)
+        crobj = creator.Creator()
+        crobj.optparser = crobj.get_optparser()
+        doc = crobj.__doc__
+        doc = crobj._help_reindent(doc)
+        doc = crobj._help_preprocess(doc, None)
+        doc = doc.replace(crobj.name, "${cmd_name}", 1)
         doc = doc.rstrip() + '\n'
         return doc
 
     @cmdln.alias("cr")
     def do_create(self, argv):
-        cr = creator.Creator()
-        cr.main(argv[1:])
+        crobj = creator.Creator()
+        crobj.main(argv[1:])
 
     def _root_confirm(self):
         if os.geteuid() != 0:
@@ -217,15 +216,15 @@ class MicCmd(cmdln.Cmdln):
 
 if __name__ == "__main__":
     try:
-        mic = MicCmd()
-        sys.exit(mic.main())
+        MIC = MicCmd()
+        sys.exit(MIC.main())
 
     except KeyboardInterrupt:
         msger.error('\n^C catched, program aborted.')
 
     # catch 'no space left' exception, etc
-    except IOError, e:
-        if e.errno == errno.ENOSPC:
+    except IOError, ioerr:
+        if ioerr.errno == errno.ENOSPC:
             msger.error('\nNo space left on device')
         raise
 
@@ -236,8 +235,8 @@ if __name__ == "__main__":
         msger.info(str(msg))
 
     except errors.CreatorError, err:
-        if msger.get_loglevel() == 'debug':
+        if msger.get_loglevel() == 'DEBUG':
             import traceback
             msger.error(traceback.format_exc())
         else:
-            msger.error('\n'+str(err))
+            msger.error(str(err))

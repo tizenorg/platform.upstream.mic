@@ -167,9 +167,9 @@ class Creator(cmdln.Cmdln):
         abspath = lambda pth: os.path.abspath(os.path.expanduser(pth))
 
         if self.options.verbose:
-            msger.set_loglevel('verbose')
+            msger.set_loglevel('VERBOSE')
         if self.options.debug:
-            msger.set_loglevel('debug')
+            msger.set_loglevel('DEBUG')
 
         if self.options.logfile:
             logfile_abs_path = abspath(self.options.logfile)
@@ -179,7 +179,11 @@ class Creator(cmdln.Cmdln):
             if not os.path.exists(os.path.dirname(logfile_abs_path)):
                 os.makedirs(os.path.dirname(logfile_abs_path))
             msger.set_interactive(False)
-            msger.set_logfile(logfile_abs_path)
+            if rt_util.inbootstrap():
+                mode = 'a'
+            else:
+                mode = 'w'
+            msger.set_logfile(logfile_abs_path, mode)
             configmgr.create['logfile'] = self.options.logfile
 
         if self.options.config:
@@ -197,6 +201,12 @@ class Creator(cmdln.Cmdln):
               and not os.path.isdir(configmgr.create[cdir]):
                 msger.error('Invalid directory specified: %s' \
                             % configmgr.create[cdir])
+            if not os.path.exists(configmgr.create[cdir]):
+                os.makedirs(configmgr.create[cdir])
+                if os.getenv('SUDO_UID', '') and os.getenv('SUDO_GID', ''):
+                    os.chown(configmgr.create[cdir],
+                             int(os.getenv('SUDO_UID')),
+                             int(os.getenv('SUDO_GID')))
 
         if self.options.local_pkgs_path is not None:
             if not os.path.exists(self.options.local_pkgs_path):
@@ -303,7 +313,12 @@ class Creator(cmdln.Cmdln):
             return ['help', argv[0]]
 
         if os.geteuid() != 0:
-            raise msger.error("Root permission is required, abort")
+            msger.error("Root permission is required, abort")
+
+        try:
+            w = pwd.getpwuid(os.geteuid())
+        except KeyError:
+            msger.warning("Might fail in compressing stage for undetermined user")
 
         try:
             w = pwd.getpwuid(os.geteuid())

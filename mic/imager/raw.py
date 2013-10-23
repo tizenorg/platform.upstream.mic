@@ -325,7 +325,6 @@ class RawImageCreator(BaseImageCreator):
             msger.debug("Installing syslinux bootloader '%s' to %s" % \
                         (mbrfile, loopdev))
 
-            mbrsize = os.stat(mbrfile)[stat.ST_SIZE]
             rc = runner.show(['dd', 'if=%s' % mbrfile, 'of=' + loopdev])
             if rc != 0:
                 raise MountError("Unable to set MBR to %s" % loopdev)
@@ -367,6 +366,10 @@ class RawImageCreator(BaseImageCreator):
         for p in self.__instloop.partitions:
             env.update(self._set_part_env(p['ks_pnum'], "UUID", p['uuid']))
             env.update(self._set_part_env(p['ks_pnum'], "PARTUUID", p['partuuid']))
+            env.update(self._set_part_env(p['ks_pnum'], "DEVNODE_NOW",
+                                          p['mapper_device']))
+            env.update(self._set_part_env(p['ks_pnum'], "DISK_DEVNODE_NOW",
+                                          self.__disks[p['disk_name']].device))
 
         return env
 

@@ -57,6 +57,16 @@ class LoopPlugin(ImagerPlugin):
         if creatoropts['runtime'] == "bootstrap":
             configmgr._ksconf = ksconf
             rt_util.bootstrap_mic()
+        elif not rt_util.inbootstrap():
+            try:
+                fs_related.find_binary_path('mic-native')
+            except errors.CreatorError:
+                if not msger.ask("Subpackage \"mic-native\" has not been "
+                                 "installed in your host system, still "
+                                 "continue with \"native\" running mode?",
+                                 False):
+                    raise errors.Abort("Abort because subpackage 'mic-native' "
+                                       "has not been installed")
 
         recording_pkgs = []
         if len(creatoropts['record_pkgs']) > 0:
@@ -158,7 +168,7 @@ class LoopPlugin(ImagerPlugin):
             elif fstype in ("vfat", "msdos"):
                 myDiskMount = fs_related.VfatDiskMount
             else:
-                msger.error("Cannot support fstype: %s" % fstype)
+                raise errors.CreatorError("Cannot support fstype: %s" % fstype)
 
             name = os.path.join(tmpdir, name)
             size = size * 1024L * 1024L

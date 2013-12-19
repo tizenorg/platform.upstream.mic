@@ -2,68 +2,26 @@
 
 Name:       mic
 Summary:    Image Creator for Linux Distributions
-Version:    0.22.3
+Version:    0.23
 Release:    1
-Group:      System/Base
+Group:      Development/Tools
 License:    GPLv2
 BuildArch:  noarch
 URL:        http://www.tizen.org
 Source0:    %{name}_%{version}.tar.gz
+
+Requires:   python >= 2.6
+Requires:   python-urlgrabber >= 3.9.0
 %if 0%{?tizen_version:1}
 Requires:   python-rpm
 %else
 Requires:   rpm-python
 %endif
-Requires:   util-linux
-Requires:   coreutils
-Requires:   python >= 2.5
-Requires:   e2fsprogs
-Requires:   dosfstools >= 2.11
-%if 0%{?centos_version}
-Requires:   syslinux >= 3.82
-%else
-Requires:   syslinux >= 4.05
-%endif
-Requires:   kpartx
-Requires:   parted
-Requires:   device-mapper
-Requires:   /usr/bin/genisoimage
+
 Requires:   cpio
-%if ! 0%{?tizen_version:1}
-Requires:   isomd5sum
-%endif
+# not neccessary
 Requires:   gzip
 Requires:   bzip2
-Requires:   python-urlgrabber
-Requires:   yum >= 3.2.24
-Requires:   psmisc
-%if ! 0%{?centos_version}
-%if 0%{?suse_version}
-Requires:   btrfsprogs
-%else
-Requires:   btrfs-progs
-%endif
-%endif
-
-%if 0%{?suse_version} || 0%{?tizen_version:1}
-Requires:   squashfs >= 4.0
-Requires:   python-m2crypto
-%else
-Requires:   squashfs-tools >= 4.0
-Requires:   m2crypto
-%endif
-
-%if 0%{?fedora_version} || 0%{?centos_version}
-Requires:   syslinux-extlinux
-%endif
-
-%if 0%{?suse_version} || 0%{?tizen_version:1}
-Requires:   /usr/bin/qemu-arm
-%else
-Requires:   qemu-arm-static
-%endif
-
-Requires:   tizen-python-zypp
 
 BuildRequires:  python-devel
 %if ! 0%{?tizen_version:1}
@@ -81,14 +39,65 @@ is used to create images with different types; subcommand convert is used to
 convert an image to a specified type; subcommand chroot is used to chroot into
 an image.
 
+%package native
+Summary:    Native support for mic
+Requires:   util-linux
+Requires:   coreutils
+Requires:   psmisc
+Requires:   e2fsprogs
+Requires:   dosfstools >= 2.11
+Requires:   kpartx
+Requires:   parted
+Requires:   device-mapper
+Requires:   syslinux >= 3.82
+%if ! 0%{?suse_version}
+Requires:   syslinux-extlinux >= 3.82
+%endif
+
+%if 0%{?suse_version} || 0%{?tizen_version:1}
+Requires:   squashfs >= 4.0
+Requires:   python-m2crypto
+%else
+Requires:   squashfs-tools >= 4.0
+Requires:   m2crypto
+%endif
+
+%if 0%{?suse_version} || 0%{?tizen_version:1}
+Requires:   /usr/bin/qemu-arm
+%else
+Requires:   qemu-arm-static
+%endif
+
+%if ! 0%{?tizen_version:1}
+Requires:   isomd5sum
+Requires:   /usr/bin/genisoimage
+%endif
+
+Requires:   yum >= 3.2.24
+%if 0%{?tizen_version:1}
+Requires:   python-zypp
+%else
+Requires:   tizen-python-zypp >= 20131212
+%endif
+
+Requires:   mic
+
+#%if 0%{?suse_version}
+#Requires:   btrfsprogs
+#%else
+#Requires:   btrfs-progs
+#%endif
+
+%description native
+The native support package for mic, it includes all requirements
+for mic native running.
+
 %prep
 %setup -q -n %{name}-%{version}
 
 %build
 CFLAGS="$RPM_OPT_FLAGS" %{__python} setup.py build
-%if ! 0%{?tizen_version:1}
 make man
-%endif
 
 %install
 rm -rf $RPM_BUILD_ROOT
@@ -100,17 +109,17 @@ rm -rf $RPM_BUILD_ROOT
 
 # install man page
 mkdir -p %{buildroot}/%{_prefix}/share/man/man1
-%if ! 0%{?tizen_version:1}
 install -m644 doc/mic.1 %{buildroot}/%{_prefix}/share/man/man1
-%endif
 
 # install bash completion
 install -d -m0755 %{buildroot}/%{_sysconfdir}/bash_completion.d/
-install -Dp -m0755 etc/%{name}.bash %{buildroot}/%{_sysconfdir}/bash_completion.d/%{name}.sh
+install -Dp -m0755 etc/bash_completion.d/%{name}.sh %{buildroot}/%{_sysconfdir}/bash_completion.d/
 
 # install zsh completion
 install -d -m0755 %{buildroot}/%{_sysconfdir}/zsh_completion.d/
-install -Dp -m0755 etc/_%{name} %{buildroot}/%{_sysconfdir}/zsh_completion.d/_%{name}
+install -Dp -m0755 etc/zsh_completion.d/_%{name} %{buildroot}/%{_sysconfdir}/zsh_completion.d/
+
+install -Dp -m0755 tools/mic %{buildroot}/%{_bindir}/mic-native
 
 %files
 %defattr(-,root,root,-)
@@ -124,6 +133,9 @@ install -Dp -m0755 etc/_%{name} %{buildroot}/%{_sysconfdir}/zsh_completion.d/_%{
 %{python_sitelib}/*
 %dir %{_prefix}/lib/%{name}
 %{_prefix}/lib/%{name}/*
-%{_bindir}/*
+%{_bindir}/mic
 %{_sysconfdir}/bash_completion.d
 %{_sysconfdir}/zsh_completion.d
+
+%files native
+%{_bindir}/mic-native

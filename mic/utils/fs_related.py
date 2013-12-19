@@ -92,7 +92,7 @@ class BindChrootMount:
     """Represents a bind mount of a directory into a chroot."""
     def __init__(self, src, chroot, dest = None, option = None):
         self.root = os.path.abspath(os.path.expanduser(chroot))
-        self.option = option
+        self.mount_option = option
 
         self.orig_src = self.src = src
         if os.path.islink(src):
@@ -122,14 +122,15 @@ class BindChrootMount:
             return
 
         makedirs(self.dest)
-        rc = runner.show([self.mountcmd, "--bind", self.src, self.dest])
+        if self.mount_option:
+            cmdline = [self.mountcmd, "--bind", "-o", "%s" % \
+                       self.mount_option, self.src, self.dest]
+        else:
+            cmdline = [self.mountcmd, "--bind", self.src, self.dest]
+        rc, errout = runner.runtool(cmdline, catch=2)
         if rc != 0:
-            raise MountError("Bind-mounting '%s' to '%s' failed" %
-                             (self.src, self.dest))
-        if self.option:
-            rc = runner.show([self.mountcmd, "--bind", "-o", "remount,%s" % self.option, self.dest])
-            if rc != 0:
-                raise MountError("Bind-remounting '%s' failed" % self.dest)
+            raise MountError("Bind-mounting '%s' to '%s' failed: %s" %
+                             (self.src, self.dest, errout))
 
         self.mounted = True
         if os.path.islink(self.orig_src):
@@ -411,11 +412,11 @@ class DiskMount(Mount):
 
 class ExtDiskMount(DiskMount):
     """A DiskMount object that is able to format/resize ext[23] filesystems."""
-    def __init__(self, disk, mountdir, fstype, blocksize, fslabel, rmmountdir=True, skipformat = False, fsopts = None):
+    def __init__(self, disk, mountdir, fstype, blocksize, fslabel, rmmountdir=True, skipformat = False, fsopts = None, fsuuid=None):
         DiskMount.__init__(self, disk, mountdir, fstype, rmmountdir)
         self.blocksize = blocksize
         self.fslabel = fslabel.replace("/", "")
-        self.uuid = str(uuid.uuid4())
+        self.uuid = fsuuid or str(uuid.uuid4())
         self.skipformat = skipformat
         self.fsopts = fsopts
         self.extopts = None
@@ -522,13 +523,13 @@ class ExtDiskMount(DiskMount):
 
 class VfatDiskMount(DiskMount):
     """A DiskMount object that is able to format vfat/msdos filesystems."""
-    def __init__(self, disk, mountdir, fstype, blocksize, fslabel, rmmountdir=True, skipformat = False, fsopts = None):
+    def __init__(self, disk, mountdir, fstype, blocksize, fslabel, rmmountdir=True, skipformat = False, fsopts = None, fsuuid = None):
         DiskMount.__init__(self, disk, mountdir, fstype, rmmountdir)
         self.blocksize = blocksize
         self.fslabel = fslabel.replace("/", "")
         rand1 = random.randint(0, 2**16 - 1)
         rand2 = random.randint(0, 2**16 - 1)
-        self.uuid = "%04X-%04X" % (rand1, rand2)
+        self.uuid = fsuuid or "%04X-%04X" % (rand1, rand2)
         self.skipformat = skipformat
         self.fsopts = fsopts
         self.fsckcmd = find_binary_path("fsck." + self.fstype)
@@ -606,12 +607,12 @@ class VfatDiskMount(DiskMount):
 
 class BtrfsDiskMount(DiskMount):
     """A DiskMount object that is able to format/resize btrfs filesystems."""
-    def __init__(self, disk, mountdir, fstype, blocksize, fslabel, rmmountdir=True, skipformat = False, fsopts = None):
+    def __init__(self, disk, mountdir, fstype, blocksize, fslabel, rmmountdir=True, skipformat = False, fsopts = None, fsuuid = None):
         self.__check_btrfs()
         DiskMount.__init__(self, disk, mountdir, fstype, rmmountdir)
         self.blocksize = blocksize
         self.fslabel = fslabel.replace("/", "")
-        self.uuid  = None
+        self.uuid  = fsuuid or None
         self.skipformat = skipformat
         self.fsopts = fsopts
         self.blkidcmd = find_binary_path("blkid")
@@ -898,7 +899,7 @@ class LoopDevice(object):
                 self.cleanup()
                 self.device = None
             except MountError, e:
-                msger.error("%s" % e)
+                raise CreatorError("%s" % e)
 
     def cleanup(self):
 

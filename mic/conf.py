@@ -43,8 +43,6 @@ class ConfigMgr(object):
                     "tmpdir": '/var/tmp/mic',
                     "cachedir": '/var/tmp/mic/cache',
                     "outdir": './mic-output',
-
-                    "plugin_dir": "/usr/lib/mic/plugins",
                     "arch": None, # None means auto-detect
                     "pkgmgr": "auto",
                     "name": "output",
@@ -121,7 +119,7 @@ class ConfigMgr(object):
 
     def __set_ksconf(self, ksconf):
         if not os.path.isfile(ksconf):
-            msger.error('Cannot find ks file: %s' % ksconf)
+            raise errors.KsError('Cannot find ks file: %s' % ksconf)
 
         self.__ksconf = ksconf
         self._parse_kickstart(ksconf)
@@ -130,11 +128,21 @@ class ConfigMgr(object):
     _ksconf = property(__get_ksconf, __set_ksconf)
 
     def _parse_siteconf(self, siteconf):
-        if not siteconf:
-            return
 
-        if not os.path.exists(siteconf):
-            msger.warning("cannot read config file: %s" % siteconf)
+        if os.getenv("MIC_PLUGIN_DIR"):
+            self.common["plugin_dir"] = os.environ["MIC_PLUGIN_DIR"]
+
+        if siteconf and not os.path.exists(siteconf):
+            msger.warning("cannot find config file: %s" % siteconf)
+            siteconf = None
+
+        if not siteconf:
+            self.common["distro_name"] = "Tizen"
+            # append common section items to other sections
+            for section in self.DEFAULTS.keys():
+                if section != "common":
+                    getattr(self, section).update(self.common)
+
             return
 
         parser = ConfigParser.SafeConfigParser()
@@ -155,7 +163,7 @@ class ConfigMgr(object):
             if m:
                 scheme = m.group(1)
                 if scheme not in ('http', 'https', 'ftp', 'socks'):
-                    msger.error("%s: proxy scheme is incorrect" % siteconf)
+                    raise errors.ConfigError("%s: proxy scheme is incorrect" % siteconf)
             else:
                 msger.warning("%s: proxy url w/o scheme, use http as default"
                               % siteconf)
@@ -230,7 +238,7 @@ class ConfigMgr(object):
 
     def set_runtime(self, runtime):
         if runtime not in ("bootstrap", "native"):
-            msger.error("Invalid runtime mode: %s" % runtime)
+            raise errors.CreatorError("Invalid runtime mode: %s" % runtime)
 
         if misc.get_distro()[0] in ("tizen", "Tizen"):
             runtime = "native"

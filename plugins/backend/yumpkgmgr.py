@@ -31,7 +31,9 @@ from mic.utils import misc, rpmmisc
 from mic.utils.grabber import TextProgress
 from mic.utils.proxy import get_proxy_for
 from mic.utils.errors import CreatorError
+from mic.utils.safeurl import SafeURL
 from mic.imager.baseimager import BaseImageCreator
+
 
 YUMCONF_TEMP = """[main]
 installroot=$installroot
@@ -45,6 +47,10 @@ sslverify=1
 """
 
 class MyYumRepository(yum.yumRepo.YumRepository):
+    def __init__(self, repoid, nocache):
+        super(MyYumRepository, self).__init__(repoid)
+        self.nocache = nocache
+
     def __del__(self):
         pass
 
@@ -264,8 +270,7 @@ class Yum(BackendPlugin, yum.YumBase):
             option = option.replace("$basearch", rpmUtils.arch.getBaseArch())
             option = option.replace("$arch", rpmUtils.arch.getCanonArch())
             return option
-
-        repo = MyYumRepository(name)
+        repo = MyYumRepository(name, nocache)
 
         # Set proxy
         repo.proxy = proxy
@@ -273,12 +278,7 @@ class Yum(BackendPlugin, yum.YumBase):
         repo.proxy_password = proxy_password
 
         if url:
-            repo.baseurl.append(_varSubstitute(url))
-
-        # check LICENSE files
-        if not rpmmisc.checkRepositoryEULA(name, repo):
-            msger.warning('skip repo:%s for failed EULA confirmation' % name)
-            return None
+            repo.baseurl.append(_varSubstitute(url.full))
 
         if mirrorlist:
             repo.mirrorlist = _varSubstitute(mirrorlist)
@@ -289,7 +289,6 @@ class Yum(BackendPlugin, yum.YumBase):
                 repo.setAttribute(k, v)
 
         repo.sslverify = ssl_verify
-        repo.cache = not nocache
 
         repo.basecachedir = self.cachedir
         repo.base_persistdir = self.conf.persistdir
@@ -379,7 +378,7 @@ class Yum(BackendPlugin, yum.YumBase):
         for po in dlpkgs:
             local = po.localPkg()
             repo = filter(lambda r: r.id == po.repoid, self.repos.listEnabled())[0]
-            if not repo.cache and os.path.exists(local):
+            if repo.nocache and os.path.exists(local):
                 os.unlink(local)
             if not os.path.exists(local):
                 continue
@@ -474,18 +473,18 @@ class Yum(BackendPlugin, yum.YumBase):
     def package_url(self, pkgname):
         pkgs = self.pkgSack.searchNevra(name=pkgname)
         if pkgs:
-            proxy = None
-            proxies = None
-            url = pkgs[0].remote_url
-            repoid = pkgs[0].repoid
-            repos = filter(lambda r: r.id == repoid, self.repos.listEnabled())
+            pkg = pkgs[0]
 
-            if repos:
-                proxy = repos[0].proxy
+            repo = pkg.repo
+            url = SafeURL(repo.baseurl[0]).join(pkg.remote_path)
+
+            proxy = repo.proxy
             if not proxy:
                 proxy = get_proxy_for(url)
             if proxy:
                 proxies = {str(url.split(':')[0]): str(proxy)}
+            else:
+                proxies = None
 
             return (url, proxies)
 

@@ -442,9 +442,7 @@ class BaseImageCreator(object):
             env.update(self._set_part_env(pnum, "MOUNTPOINT", p.mountpoint))
             env.update(self._set_part_env(pnum, "FSTYPE", p.fstype))
             env.update(self._set_part_env(pnum, "LABEL", p.label))
-            env.update(self._set_part_env(pnum, "FSOPTS",
-                                          "defaults,noatime" if not p.fsopts
-                                          else p.fsopts))
+            env.update(self._set_part_env(pnum, "FSOPTS", p.fsopts))
             env.update(self._set_part_env(pnum, "BOOTFLAG", p.active))
             env.update(self._set_part_env(pnum, "ALIGN", p.align))
             env.update(self._set_part_env(pnum, "TYPE_ID", p.part_type))
@@ -465,9 +463,6 @@ class BaseImageCreator(object):
         # The kerned boot parameters
         kernel_opts = self.ks.handler.bootloader.appendLine
         env[self.installerfw_prefix + "KERNEL_OPTS"] = kernel_opts
-
-        # Name of the distribution
-        env[self.installerfw_prefix + "DISTRO_NAME"] = self.distro_name
 
         # Name of the image creation tool
         env[self.installerfw_prefix + "INSTALLER_NAME"] = "mic"
@@ -968,7 +963,7 @@ class BaseImageCreator(object):
             if not os.path.exists(fpath):
                 # download pkgs
                 try:
-                    fpath = grabber.myurlgrab(url, fpath, proxies, None)
+                    fpath = grabber.myurlgrab(url.full, fpath, proxies, None)
                 except CreatorError:
                     raise
 
@@ -986,7 +981,7 @@ class BaseImageCreator(object):
         into the install root. By default, the packages are installed from the
         repository URLs specified in the kickstart.
 
-        repo_urls -- a dict which maps a repository name to a repository URL;
+        repo_urls -- a dict which maps a repository name to a repository;
                      if supplied, this causes any repository URLs specified in
                      the kickstart to be overridden.
 
@@ -1006,6 +1001,9 @@ class BaseImageCreator(object):
             self._excluded_pkgs = None
             self._required_groups = None
 
+        if not repo_urls:
+            repo_urls = self.extrarepos
+
         pkg_manager = self.get_pkg_manager()
         pkg_manager.setup()
 
@@ -1013,7 +1011,7 @@ class BaseImageCreator(object):
             if 'debuginfo' in self.install_pkgs:
                 pkg_manager.install_debuginfo = True
 
-        for repo in kickstart.get_repos(self.ks, repo_urls):
+        for repo in kickstart.get_repos(self.ks, repo_urls, self.ignore_ksrepo):
             (name, baseurl, mirrorlist, inc, exc,
              proxy, proxy_username, proxy_password, debuginfo,
              source, gpgkey, disable, ssl_verify, nocache,

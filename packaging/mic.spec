@@ -1,9 +1,15 @@
 %{!?python_sitelib: %define python_sitelib %(%{__python} -c "from distutils.sysconfig import get_python_lib; print get_python_lib()")}
 
+%define rc_version 0
+
+%if 0%{?rc_version}
+%define release_prefix 0.rc%{rc_version}.
+%endif
+
 Name:       mic
 Summary:    Image Creator for Linux Distributions
-Version:    0.23.1
-Release:    1
+Version:    0.24
+Release:    %{?release_prefix}%{?opensuse_bs:<CI_CNT>.<B_CNT>}%{!?opensuse_bs:0}
 Group:      Development/Tools
 License:    GPLv2
 BuildArch:  noarch
@@ -77,7 +83,7 @@ Requires:   yum >= 3.2.24
 %if 0%{?tizen_version:1}
 Requires:   python-zypp
 %else
-Requires:   tizen-python-zypp >= 20131212
+Requires:   python-zypp-tizen
 %endif
 
 Requires:   mic

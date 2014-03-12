@@ -79,6 +79,8 @@ class Zypp(BackendPlugin):
 
         self.has_prov_query = True
         self.install_debuginfo = False
+        # this can't be changed, it is used by zypp
+        self.tmp_file_path = '/var/tmp'
 
     def doFileLogSetup(self, uid, logfile):
         # don't do the file log for the livecd as it can lead to open fds
@@ -117,11 +119,15 @@ class Zypp(BackendPlugin):
 
     def setup(self):
         self._cleanupRpmdbLocks(self.instroot)
+        # '/var/tmp' is used by zypp to build cache, so make sure
+        # if it exists
+        if not os.path.exists(self.tmp_file_path ):
+            os.makedirs(self.tmp_file_path)
 
     def whatObsolete(self, pkg):
         query = zypp.PoolQuery()
         query.addKind(zypp.ResKind.package)
-        query.addAttribute(zypp.SolvAttr.obsoletes, pkg)
+        query.addDependency(zypp.SolvAttr.obsoletes, pkg.name(), pkg.edition())
         query.setMatchExact()
         for pi in query.queryResults(self.Z.pool()):
             return pi
@@ -227,7 +233,7 @@ class Zypp(BackendPlugin):
                 continue
 
             found = True
-            obspkg = self.whatObsolete(item.name())
+            obspkg = self.whatObsolete(item)
             if arch:
                 if arch == str(item.arch()):
                     item.status().setToBeInstalled (zypp.ResStatus.USER)
@@ -255,7 +261,7 @@ class Zypp(BackendPlugin):
                     continue
 
                 found = True
-                obspkg = self.whatObsolete(item.name())
+                obspkg = self.whatObsolete(item)
                 markPoolItem(obspkg, pitem)
                 break
 
@@ -354,11 +360,6 @@ class Zypp(BackendPlugin):
             for pkg in exc:
                 self.excpkgs[pkg] = name
 
-        # check LICENSE files
-        if not rpmmisc.checkRepositoryEULA(name, repo):
-            msger.warning('skip repo:%s for failed EULA confirmation' % name)
-            return None
-
         if mirrorlist:
             repo.mirrorlist = mirrorlist
 
@@ -375,7 +376,7 @@ class Zypp(BackendPlugin):
             repo_info.setEnabled(repo.enabled)
             repo_info.setAutorefresh(repo.autorefresh)
             repo_info.setKeepPackages(repo.keeppackages)
-            baseurl = zypp.Url(repo.baseurl[0])
+            baseurl = zypp.Url(repo.baseurl[0].full)
             if not ssl_verify:
                 baseurl.setQueryParam("ssl_verify", "no")
             if proxy:
@@ -414,7 +415,6 @@ class Zypp(BackendPlugin):
             else:
                 baseurl.setQueryParam ("proxy", "_none_")
 
-            repo.baseurl[0] = baseurl.asCompleteString()
             self.repos.append(repo)
 
             repo_info.addBaseUrl(baseurl)
@@ -775,7 +775,7 @@ class Zypp(BackendPlugin):
             proxies = self.get_proxies(po)
 
             try:
-                filename = myurlgrab(url, filename, proxies, progress_obj)
+                filename = myurlgrab(url.full, filename, proxies, progress_obj)
             except CreatorError:
                 self.close()
                 raise
@@ -957,18 +957,12 @@ class Zypp(BackendPlugin):
         except IndexError:
             return None
 
-        baseurl = repo.baseurl[0]
-
-        index = baseurl.find("?")
-        if index > -1:
-            baseurl = baseurl[:index]
-
         location = pobj.location()
         location = str(location.filename())
         if location.startswith("./"):
             location = location[2:]
 
-        return os.path.join(baseurl, location)
+        return repo.baseurl[0].join(location)
 
     def package_url(self, pkgname):
 

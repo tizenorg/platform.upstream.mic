@@ -64,6 +64,8 @@ class ConfigMgr(object):
                     "repourl": {},
                     "localrepos": [],  # save localrepos
                     "runtime": "bootstrap",
+                    "extrarepos": {},
+                    "ignore_ksrepo": False,
                 },
                 'chroot': {
                     "saveto": None,
@@ -200,13 +202,15 @@ class ConfigMgr(object):
                                               self.create['name_suffix'])
 
         msger.info("Retrieving repo metadata:")
-        ksrepos = misc.get_repostrs_from_ks(ks)
+        ksrepos = kickstart.get_repos(ks,
+                                      self.create['extrarepos'],
+                                      self.create['ignore_ksrepo'])
         if not ksrepos:
             raise errors.KsError('no valid repos found in ks file')
 
         for repo in ksrepos:
-            if 'baseurl' in repo and repo['baseurl'].startswith("file:"):
-                repourl = repo['baseurl'].replace('file:', '')
+            if hasattr(repo, 'baseurl') and repo.baseurl.startswith("file:"):
+                repourl = repo.baseurl.replace('file:', '')
                 repourl = "/%s" % repourl.lstrip('/')
                 self.create['localrepos'].append(repourl)
 

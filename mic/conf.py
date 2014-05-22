@@ -32,6 +32,11 @@ def get_siteconf():
     else:
         return DEFAULT_GSITECONF
 
+def inbootstrap():
+    if os.path.exists(os.path.join("/", ".chroot.lock")):
+        return True
+    return (os.stat("/").st_ino != 2)
+
 class ConfigMgr(object):
     prefer_backends = ["zypp", "yum"]
 
@@ -43,6 +48,7 @@ class ConfigMgr(object):
                     "tmpdir": '/var/tmp/mic',
                     "cachedir": '/var/tmp/mic/cache',
                     "outdir": './mic-output',
+                    "destdir": None,
                     "arch": None, # None means auto-detect
                     "pkgmgr": "auto",
                     "name": "output",
@@ -52,6 +58,7 @@ class ConfigMgr(object):
                     "local_pkgs_path": None,
                     "release": None,
                     "logfile": None,
+                    "releaselog": False,
                     "record_pkgs": [],
                     "pack_to": None,
                     "name_prefix": None,
@@ -201,6 +208,19 @@ class ConfigMgr(object):
                                               self.create['name_prefix'],
                                               self.create['name_suffix'])
 
+        self.create['destdir'] = self.create['outdir']
+        if self.create['release'] is not None:
+            self.create['destdir'] = "%s/%s/images/%s/" % (self.create['outdir'],
+                                                           self.create['release'],
+                                                           self.create['name'])
+            self.create['name'] = self.create['release'] + '_' + self.create['name']
+
+            if not self.create['logfile']:
+                self.create['logfile'] = os.path.join(self.create['outdir'],
+                                                      self.create['name'] + ".log")
+                self.create['releaselog'] = True
+                self.set_logfile()
+
         msger.info("Retrieving repo metadata:")
         ksrepos = kickstart.get_repos(ks,
                                       self.create['extrarepos'],
@@ -239,6 +259,20 @@ class ConfigMgr(object):
         # check selinux, it will block arm and btrfs image creation
         misc.selinux_check(self.create['arch'],
                            [p.fstype for p in ks.handler.partition.partitions])
+
+    def set_logfile(self, logfile = None):
+        if not logfile:
+            logfile = self.create['logfile']
+
+        logfile_dir = os.path.dirname(self.create['logfile'])
+        if not os.path.exists(logfile_dir):
+            os.makedirs(logfile_dir)
+        msger.set_interactive(False)
+        if inbootstrap():
+            mode = 'a'
+        else:
+            mode = 'w'
+        msger.set_logfile(self.create['logfile'], mode)
 
     def set_runtime(self, runtime):
         if runtime not in ("bootstrap", "native"):

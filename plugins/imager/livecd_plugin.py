@@ -75,10 +75,6 @@ class LiveCDPlugin(ImagerPlugin):
 
         configmgr._ksconf = ksconf
 
-        # Called After setting the configmgr._ksconf as the creatoropts['name'] is reset there.
-        if creatoropts['release'] is not None:
-            creatoropts['outdir'] = "%s/%s/images/%s/" % (creatoropts['outdir'], creatoropts['release'], creatoropts['name'])
-
         # try to find the pkgmgr
         pkgmgr = None
         backends = pluginmgr.get_plugins('backend')
@@ -116,9 +112,10 @@ class LiveCDPlugin(ImagerPlugin):
             creator.configure(creatoropts["repomd"])
             creator.copy_kernel()
             creator.unmount()
-            creator.package(creatoropts["outdir"])
+            creator.package(creatoropts["destdir"])
+            creator.create_manifest()
             if creatoropts['release'] is not None:
-                creator.release_output(ksconf, creatoropts['outdir'], creatoropts['release'])
+                creator.release_output(ksconf, creatoropts['destdir'], creatoropts['release'])
             creator.print_outimage_info()
 
         except errors.CreatorError:

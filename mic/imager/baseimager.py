@@ -26,14 +26,17 @@ import subprocess
 import re
 import tarfile
 import glob
+import json
+from datetime import datetime
 
 import rpm
 
 from mic import kickstart
-from mic import msger
+from mic import msger, __version__ as VERSION
 from mic.utils.errors import CreatorError, Abort
 from mic.utils import misc, grabber, runner, fs_related as fs
 from mic.chroot import kill_proc_inchroot
+from mic.archive import get_archive_suffixes
 
 class BaseImageCreator(object):
     """Installs a system to a chroot directory.
@@ -48,6 +51,8 @@ class BaseImageCreator(object):
       imgcreate.ImageCreator(ks, "foo").create()
 
     """
+    # Output image format
+    img_format = ''
 
     def __del__(self):
         self.cleanup()
@@ -89,7 +94,6 @@ class BaseImageCreator(object):
         if createopts:
             # Mapping table for variables that have different names.
             optmap = {"pkgmgr" : "pkgmgr_name",
-                      "outdir" : "destdir",
                       "arch" : "target_arch",
                       "local_pkgs_path" : "_local_pkgs_path",
                       "copy_kernel" : "_need_copy_kernel",
@@ -105,23 +109,21 @@ class BaseImageCreator(object):
 
             self.destdir = os.path.abspath(os.path.expanduser(self.destdir))
 
-            if 'release' in createopts and createopts['release']:
-                self.name = createopts['release'] + '_' + self.name
-
             if self.pack_to:
                 if '@NAME@' in self.pack_to:
                     self.pack_to = self.pack_to.replace('@NAME@', self.name)
                 (tar, ext) = os.path.splitext(self.pack_to)
-                if ext in (".gz", ".bz2") and tar.endswith(".tar"):
+                if ext in (".gz", ".bz2", ".lzo", ".bz") and tar.endswith(".tar"):
                     ext = ".tar" + ext
-                if ext not in misc.pack_formats:
+                if ext not in get_archive_suffixes():
                     self.pack_to += ".tar"
 
         self._dep_checks = ["ls", "bash", "cp", "echo", "modprobe"]
 
         # Output image file names
         self.outimage = []
-
+        # Output info related with manifest
+        self.image_files = {}
         # A flag to generate checksum
         self._genchecksum = False
 
@@ -1282,13 +1284,11 @@ class BaseImageCreator(object):
         outimages.append(new_kspath)
 
         # save log file, logfile is only available in creator attrs
-        if hasattr(self, 'logfile') and not self.logfile:
-            log_path = _rpath(self.name + ".log")
-            # touch the log file, else outimages will filter it out
-            with open(log_path, 'w') as wf:
-                wf.write('')
-            msger.set_logfile(log_path)
-            outimages.append(_rpath(self.name + ".log"))
+        if hasattr(self, 'releaselog') and self.releaselog:
+            final_logfile = _rpath(self.name+'.log')
+            shutil.move(self.logfile, final_logfile)
+            self.logfile = final_logfile
+            outimages.append(self.logfile)
 
         # rename iso and usbimg
         for f in os.listdir(destdir):
@@ -1353,3 +1353,30 @@ class BaseImageCreator(object):
         return self.pkgmgr(target_arch = self.target_arch,
                            instroot = self._instroot,
                            cachedir = self.cachedir)
+
+    def create_manifest(self):
+        def get_pack_suffix():
+            return '.' + self.pack_to.split('.', 1)[1]
+
+        if not os.path.exists(self.destdir):
+            os.makedirs(self.destdir)
+
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        manifest_dict = {'version': VERSION,
+                         'created': now}
+        if self.img_format:
+            manifest_dict.update({'format': self.img_format})
+
+        if hasattr(self, 'logfile') and self.logfile:
+            manifest_dict.update({'log_file': self.logfile})
+
+        if self.image_files:
+            if self.pack_to:
+                self.image_files.update({'pack': get_pack_suffix()})
+            manifest_dict.update({self.img_format: self.image_files})
+
+        msger.info('Creating manifest file...')
+        manifest_file_path = os.path.join(self.destdir, 'manifest.json')
+        with open(manifest_file_path, 'w') as fest_file:
+            json.dump(manifest_dict, fest_file, indent=4)
+        self.outimage.append(manifest_file_path)

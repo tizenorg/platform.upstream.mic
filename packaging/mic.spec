@@ -28,20 +28,11 @@ Requires:   bzip2
 Requires:   python-urlgrabber
 Requires:   yum >= 3.2.24
 %if ! 0%{?centos_version}
-%if 0%{?suse_version}
-Requires:   btrfsprogs
-%else
 Requires:   btrfs-progs
 %endif
-%endif
 
-%if 0%{?suse_version}
-Requires:   squashfs >= 4.0
-Requires:   python-m2crypto
-%else
 Requires:   squashfs >= 4.0
 Requires:   python-M2Crypto
-%endif
 
 %if 0%{?fedora_version} || 0%{?centos_version}
 Requires:   syslinux-extlinux
@@ -83,11 +74,7 @@ make man
 
 %install
 rm -rf $RPM_BUILD_ROOT
-%if 0%{?suse_version}
-%{__python} setup.py install --root=$RPM_BUILD_ROOT --prefix=%{_prefix}
-%else
 %{__python} setup.py install --root=$RPM_BUILD_ROOT -O1
-%endif
 
 # install man page
 mkdir -p %{buildroot}/%{_prefix}/share/man/man1

@@ -1,15 +1,13 @@
-%{!?python_sitelib: %define python_sitelib %(%{__python} -c "from distutils.sysconfig import get_python_lib; print get_python_lib()")}
-
 Name:       mic
 Summary:    Image Creator for Linux Distributions
 Version:    0.19
-Release:    1
+Release:    0
 Group:      System/Utilities
 License:    GPL-2.0
 BuildArch:  noarch
 URL:        http://www.tizen.org
 Source0:    %{name}_%{version}.tar.gz
-Source1001: 	mic.manifest
+Source1001: mic.manifest
 Requires:   python-rpm
 Requires:   util-linux
 Requires:   coreutils
@@ -60,9 +58,9 @@ BuildRequires:  python-devel
 BuildRequires:  python-docutils
 %endif
 
-Obsoletes:  mic2
+BuildRequires:fdupes
 
-BuildRoot:  %{_tmppath}/%{name}_%{version}-build
+
 
 %description
 The tool mic is used to create and manipulate images for Linux distributions.
@@ -95,11 +93,56 @@ mkdir -p %{buildroot}/%{_prefix}/share/man/man1
 install -m644 doc/mic.1 %{buildroot}/%{_prefix}/share/man/man1
 %endif
 
+for script in utils/rpmmisc.py \
+              kickstart/custom_commands/desktop.py \
+              imager/liveusb.py  \
+              kickstart/custom_commands/micboot.py  \
+              utils/gpt_parser.py  \
+              utils/cmdln.py \
+              utils/runner.py  \
+              kickstart/custom_commands/micrepo.py  \
+              rt_util.py  \
+              imager/fs.py  \
+              utils/errors.py  \
+              creator.py  \
+              kickstart/custom_commands/partition.py  \
+              kickstart/__init__.py  \
+              msger.py  \
+              utils/misc.py  \
+              imager/loop.py  \
+              pluginbase.py  \
+              utils/fs_related.py  \
+              utils/grabber.py  \
+              bootstrap.py  \
+              utils/proxy.py  \
+              utils/partitionedfs.py  \
+              imager/raw.py  \
+              chroot.py  \
+              conf.py  \
+              plugin.py  \
+              imager/livecd.py  ; do
+    chmod a+x %{buildroot}%{python_sitelib}/%{name}/${script};
+done
+
+for script in backend/yumpkgmgr.py \
+              imager/fs_plugin.py \
+              imager/liveusb_plugin.py \
+              imager/livecd_plugin.py \
+              imager/raw_plugin.py \
+              imager/loop_plugin.py ; do
+    chmod a+x %{buildroot}%{_prefix}/lib/%{name}/plugins/${script};
+done
+
+%fdupes %{buildroot}
+
+
+
 %files
 %manifest %{name}.manifest
 %defattr(-,root,root,-)
+%license COPYING
 %doc doc/*
-%doc README.rst AUTHORS COPYING ChangeLog
+%doc README.rst AUTHORS ChangeLog
 %if ! 0%{?tizen_version:1}
 %{_mandir}/man1/*
 %endif
@@ -109,4 +152,3 @@ install -m644 doc/mic.1 %{buildroot}/%{_prefix}/share/man/man1
 %dir %{_prefix}/lib/%{name}
 %{_prefix}/lib/%{name}/*
 %{_bindir}/*
-

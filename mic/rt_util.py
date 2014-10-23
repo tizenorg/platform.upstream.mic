@@ -34,19 +34,18 @@ _libc = ctypes.cdll.LoadLibrary(None)
 _errno = ctypes.c_int.in_dll(_libc, "errno")
 _libc.personality.argtypes = [ctypes.c_ulong]
 _libc.personality.restype = ctypes.c_int
-_libc.unshare.argtypes = [ctypes.c_int,]
-_libc.unshare.restype = ctypes.c_int
 
 expath = lambda p: os.path.abspath(os.path.expanduser(p))
 
 PER_LINUX32=0x0008
 PER_LINUX=0x0000
 personality_defs = {
-    'x86_64': PER_LINUX, 'ppc64': PER_LINUX, 'sparc64': PER_LINUX,
-    'i386': PER_LINUX32, 'i586': PER_LINUX32, 'i686': PER_LINUX32,
-    'ppc': PER_LINUX32, 'sparc': PER_LINUX32, 'sparcv9': PER_LINUX32,
-    'ia64' : PER_LINUX, 'alpha' : PER_LINUX,
-    's390' : PER_LINUX32, 's390x' : PER_LINUX,
+    'x86_64': PER_LINUX,
+    'i386': PER_LINUX32,
+    'i586': PER_LINUX32,
+    'i686': PER_LINUX32,
+    'ia64': PER_LINUX,
+    'arm': PER_LINUX32,
 }
 
 def condPersonality(per=None):

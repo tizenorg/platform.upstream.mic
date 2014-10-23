@@ -340,6 +340,11 @@ class Creator(cmdln.Cmdln):
         except KeyError:
             msger.warning("Might fail in compressing stage for undetermined user")
 
+        try:
+            w = pwd.getpwuid(os.geteuid())
+        except KeyError:
+            msger.warning("Might fail in compressing stage for undetermined user")
+
         return argv
 
     def do_auto(self, subcmd, opts, *args):

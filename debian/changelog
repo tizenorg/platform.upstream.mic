@@ -53,6 +53,11 @@ mic (0.24) unstable; urgency=low
 
  -- Gui Chen <gui.chen@intel.com>  Tue, 11 Mar 2014 17:25:35 +0800
 
+mic (0.23.1-1) unstable; urgency=low
+   * fix bmap creation failed if using tmpfs
+
+ -- Gui Chen <gui.chen@intel.com>  Thu, 23 Jan 2014 17:25:35 +0800
+
 mic (0.23-1) unstable; urgency=low
    * new distribution support: Ubuntu 13.10 and OpenSUSE 13.1
    * split requirements to subpackage 'mic-native' to reduce mic's dependencies
@@ -67,6 +72,13 @@ mic (0.23-1) unstable; urgency=low
      - fix version comparing issue of urlgrabber in Fedora
 
  -- Gui Chen <gui.chen@intel.com>  Fri, 12 Dec 2013 17:25:35 +0800
+
+mic (0.22.3-1) unstable; urgency=low
+   * export MAPPER_DEVICE for installer framework
+   * update BmapCreate module to 2.0
+   * enable internal setarch in bootstrap environment
+
+ -- Gui Chen <gui.chen@intel.com>  Fri, 19 Nov 2013 17:25:35 +0800
 
 mic (0.22-1) unstable; urgency=low
    * use __version__ variable instead of VERSION file
@@ -90,15 +102,16 @@ mic (0.22-1) unstable; urgency=low
 
 mic (0.21-1) unstable; urgency=low
   * new distribution support: Fedora 19
-  * refactor chroot module to correct the logic
-  * add an alias for installerfw - installerfw_plugins
-  * remove fuser dependency to avoid some unmount issue
-  * enable proxy setting with authentication
-  * don't get proxy info from /etc/sysconfig/proxy ever
+  * refactor part of chroot modules for better cleanup handling
+  * add an alias "installerfw_plugins" for installerfw
+  * remove unnecessary fuser dependency for "fuser" command
+  * enable proxy with user authentication setting
+  * correct no_proxy handling in openSUSE
   * kill processes inside chroot after post script running
+  * ulitize 'dmsetup' to avoid possible dm device unaccessible issue
   * bug fix:
     - fix bootloader options omitted
-    - raise when incorrectly set partition flags 'legacy_boot'
+    - warn failed boot partition flags set
     - fix wrong file descriptor issue
     - fix some requires
 

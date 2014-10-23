@@ -77,16 +77,26 @@ Release 0.22 - Thu Oct 24 2013 - Gui Chen <gui.chen@intel.com>
     - correct project url in setup.py
     - fix mic not work when mic.conf disappear
 
+Release 0.21.2 - Thu Sep 26 2013 - Gui Chen <gui.chen@intel.com>
+=====================================================================
+  * use sync mode in kpartx command
+
+Release 0.21.1 - Wed Sep 18 2013 - Gui Chen <gui.chen@intel.com>
+=====================================================================
+  * prefer to use 'pbzip2'/'pigz' to compress image if possible
+  * fix exiting at packaging images on Ubuntu distro
+  * won't fallback to native mode if bootstrap not found
+
 Release 0.21 - Mon Aug 26 2013 - Gui Chen <gui.chen@intel.com>
 =====================================================================
   * new distribution support: Fedora 19
-  * refactor chroot module to correct the logic
-  * add an alias for installerfw - installerfw_plugins
-  * remove fuser dependency to avoid some unmount issue
-  * enable proxy setting with authentication
-  * don't get proxy info from /etc/sysconfig/proxy ever
+  * refactor part of chroot modules for better cleanup handling
+  * add an alias "installerfw_plugins" for installerfw
+  * remove unnecessary fuser dependency for "fuser" command
+  * enable proxy with user authentication setting
+  * correct no_proxy handling in openSUSE
   * kill processes inside chroot after post script running
-  * reload device mapper using 'dmsetup' utility
+  * ulitize 'dmsetup' to avoid possible dm device unaccessible issue
   * bug fix:
     - fix bootloader options omitted
     - warn failed boot partition flags set
@@ -101,6 +111,12 @@ Release 0.20 - Mon Jul 01 2013 - Gui Chen <gui.chen@intel.com>
   * improve output message of post scripts
   * bug fix:
     - fix rpm not support 'VCS' tag traceback
+
+Release 0.19.3 - Tue Jul 01 2013 - Gui Chen <gui.chen@intel.com>
+ * fix vfat UUID issue in liveusb
+ * introduce 'installerfw' command in kickstart
+ * export several environment to keep image information
+ * fall back to old arch detecting
 
 Release 0.19 - Thu May 16 2013 - Gui Chen <gui.chen@intel.com>
 =====================================================================
